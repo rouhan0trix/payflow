@@ -1,0 +1,169 @@
+﻿{% extends "base.html" %}
+
+{% block title %}Transactions — PayFlow Payment Management{% endblock %}
+
+{% block content %}
+<div class="page-content">
+
+  <!-- Header -->
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Transaction Ledger</h1>
+      <p class="page-subtitle">Inspect historical payments, filter by lifecycle state, and execute refunds.</p>
+    </div>
+    <div class="page-header-actions">
+      <button type="button" class="btn btn-primary" onclick="openCreateModal()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        New Payment
+      </button>
+    </div>
+  </div>
+
+  <!-- Search & Filter Controls -->
+  <div class="filter-bar">
+    <div class="status-tabs" role="tablist" aria-label="Status Filter">
+      <a href="{{ url_for('transactions_page', status='all', search=search_query) }}"
+         class="tab-item {% if status_filter == 'all' or not status_filter %}active{% endif %}">
+        All
+      </a>
+      <a href="{{ url_for('transactions_page', status='succeeded', search=search_query) }}"
+         class="tab-item {% if status_filter == 'succeeded' %}active{% endif %}">
+        <span class="status-dot green"></span>
+        Succeeded
+      </a>
+      <a href="{{ url_for('transactions_page', status='refunded', search=search_query) }}"
+         class="tab-item {% if status_filter == 'refunded' %}active{% endif %}">
+        <span class="status-dot amber"></span>
+        Refunded
+      </a>
+      <a href="{{ url_for('transactions_page', status='failed', search=search_query) }}"
+         class="tab-item {% if status_filter == 'failed' %}active{% endif %}">
+        <span class="status-dot red"></span>
+        Failed
+      </a>
+      <a href="{{ url_for('transactions_page', status='pending', search=search_query) }}"
+         class="tab-item {% if status_filter == 'pending' %}active{% endif %}">
+        <span class="status-dot blue"></span>
+        Pending
+      </a>
+    </div>
+
+    <!-- Search Form -->
+    <form method="GET" action="{{ url_for('transactions_page') }}" class="search-form">
+      <input type="hidden" name="status" value="{{ status_filter }}">
+      <div class="search-input-wrap">
+        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <input type="search" name="search" class="search-input" placeholder="Search ID, description, or idempotency key..." value="{{ search_query }}">
+      </div>
+      <button type="submit" class="btn btn-secondary btn-sm">Search</button>
+      {% if search_query or (status_filter and status_filter != 'all') %}
+      <a href="{{ url_for('transactions_page') }}" class="btn btn-outline btn-sm">Reset</a>
+      {% endif %}
+    </form>
+  </div>
+
+  <!-- Transactions Table Card -->
+  <div class="card table-card">
+    <div class="table-meta-bar">
+      <span class="results-count">Showing <strong>{{ payments|length }}</strong> of <strong>{{ total }}</strong> recorded transactions</span>
+      {% if search_query %}
+      <span class="search-filter-tag">Filter: "{{ search_query }}"</span>
+      {% endif %}
+    </div>
+
+    <div class="table-responsive">
+      <table class="data-table" id="transactionsTable">
+        <thead>
+          <tr>
+            <th>Payment ID</th>
+            <th>Description</th>
+            <th>Amount (INR)</th>
+            <th>Paise</th>
+            <th>Status</th>
+            <th>Idempotency Key</th>
+            <th>Created (UTC)</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if payments %}
+            {% for t in payments %}
+            <tr data-id="{{ t.id }}">
+              <td>
+                <a href="{{ url_for('transaction_detail_page', payment_id=t.id) }}" class="mono-link">
+                  {{ t.id }}
+                </a>
+              </td>
+              <td><span class="table-desc" title="{{ t.description }}">{{ t.description }}</span></td>
+              <td><strong class="font-tabular">₹{{ t.formatted_amount_inr }}</strong></td>
+              <td><span class="mono-text">{{ "{:,}".format(t.amount_paise) }}</span></td>
+              <td>
+                <span class="status-pill {{ t.status }}">
+                  <span class="status-dot"></span>
+                  {{ t.status|capitalize }}
+                </span>
+              </td>
+              <td>
+                <span class="mono-tag" title="{{ t.idempotency_key }}">{{ t.idempotency_key[:18] }}{% if t.idempotency_key|length > 18 %}...{% endif %}</span>
+              </td>
+              <td><span class="time-text">{{ t.created_at[:19].replace('T', ' ') }}</span></td>
+              <td>
+                <div class="action-buttons">
+                  <a href="{{ url_for('transaction_detail_page', payment_id=t.id) }}" class="btn-table-action" title="View details and audit timeline">
+                    Inspect
+                  </a>
+                  {% if t.status == 'succeeded' %}
+                  <button type="button" class="btn-table-action refund" onclick="triggerRefund('{{ t.id }}')" title="Issue full simulated refund">
+                    Refund
+                  </button>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="8" class="table-empty">
+                <div class="empty-state">
+                  <div class="empty-icon">🔍</div>
+                  <p class="empty-title">No transactions match your criteria</p>
+                  <p class="empty-desc">Try clearing filters or search terms, or create a new test payment.</p>
+                  <a href="{{ url_for('transactions_page') }}" class="btn btn-outline btn-sm">Clear Filters</a>
+                  <button type="button" class="btn btn-primary btn-sm" onclick="openCreateModal()">Simulate Payment</button>
+                </div>
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div class="pagination-bar">
+      <div class="page-info">
+        Page <strong>{{ current_page }}</strong> of <strong>{{ total_pages }}</strong>
+      </div>
+      <div class="page-nav-buttons">
+        {% if current_page > 1 %}
+        <a href="{{ url_for('transactions_page', page=current_page-1, status=status_filter, search=search_query) }}" class="btn btn-outline btn-sm">
+          &larr; Previous
+        </a>
+        {% else %}
+        <span class="btn btn-outline btn-sm disabled">&larr; Previous</span>
+        {% endif %}
+
+        {% if current_page < total_pages %}
+        <a href="{{ url_for('transactions_page', page=current_page+1, status=status_filter, search=search_query) }}" class="btn btn-outline btn-sm">
+          Next &rarr;
+        </a>
+        {% else %}
+        <span class="btn btn-outline btn-sm disabled">Next &rarr;</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

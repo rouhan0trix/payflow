@@ -1,0 +1,217 @@
+﻿{% extends "base.html" %}
+
+{% block title %}Dashboard — PayFlow Transaction Management{% endblock %}
+
+{% block content %}
+<div class="page-content">
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Transaction Overview</h1>
+      <p class="page-subtitle">Real-time ledger summary and simulated payment operations.</p>
+    </div>
+    <div class="page-header-actions">
+      <button type="button" class="btn btn-outline" id="refreshMetricsBtn">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+        Refresh Stats
+      </button>
+      <button type="button" class="btn btn-primary" onclick="openCreateModal()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        Simulate Payment
+      </button>
+    </div>
+  </div>
+
+  <!-- Key Metrics Grid -->
+  <section class="metrics-grid" aria-label="Key Performance Indicators">
+    <!-- Settled Volume -->
+    <div class="metric-card primary-card">
+      <div class="metric-header">
+        <span class="metric-label">Settled Volume (INR)</span>
+        <span class="metric-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+        </span>
+      </div>
+      <div class="metric-value" id="metricGrossVolume">₹{{ metrics.formatted.succeeded_inr }}</div>
+      <div class="metric-sub">
+        <span class="sub-muted">Raw Database Units:</span>
+        <span class="mono-tag" id="metricGrossPaise">{{ "{:,}".format(metrics.amounts_paise.succeeded) }} paise</span>
+      </div>
+    </div>
+
+    <!-- Total Transactions -->
+    <div class="metric-card">
+      <div class="metric-header">
+        <span class="metric-label">Total Payment Requests</span>
+        <span class="metric-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+        </span>
+      </div>
+      <div class="metric-value" id="metricTotalPayments">{{ metrics.total_payments }}</div>
+      <div class="metric-sub">
+        <span class="success-rate-pill">{{ metrics.success_rate_percent }}% Success Rate</span>
+      </div>
+    </div>
+
+    <!-- Succeeded -->
+    <div class="metric-card status-card succeeded">
+      <div class="metric-header">
+        <span class="metric-label">Succeeded</span>
+        <span class="status-dot green"></span>
+      </div>
+      <div class="metric-value text-green" id="metricSucceededCount">{{ metrics.counts.succeeded }}</div>
+      <div class="metric-sub">
+        <span class="sub-muted">Amount:</span>
+        <span class="sub-highlight" id="metricSucceededAmount">₹{{ metrics.formatted.succeeded_inr }}</span>
+      </div>
+    </div>
+
+    <!-- Refunded -->
+    <div class="metric-card status-card refunded">
+      <div class="metric-header">
+        <span class="metric-label">Refunded</span>
+        <span class="status-dot amber"></span>
+      </div>
+      <div class="metric-value text-amber" id="metricRefundedCount">{{ metrics.counts.refunded }}</div>
+      <div class="metric-sub">
+        <span class="sub-muted">Amount:</span>
+        <span class="sub-highlight" id="metricRefundedAmount">₹{{ metrics.formatted.refunded_inr }}</span>
+      </div>
+    </div>
+
+    <!-- Failed -->
+    <div class="metric-card status-card failed">
+      <div class="metric-header">
+        <span class="metric-label">Failed / Declined</span>
+        <span class="status-dot red"></span>
+      </div>
+      <div class="metric-value text-red" id="metricFailedCount">{{ metrics.counts.failed }}</div>
+      <div class="metric-sub">
+        <span class="sub-muted">Terminal state (no refund)</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Interactive Quick-Simulation Strip -->
+  <section class="quick-sim-strip">
+    <div class="quick-sim-title">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+      <span>Instant Simulation Presets:</span>
+    </div>
+    <div class="quick-sim-buttons">
+      <button type="button" class="btn btn-preset" onclick="runPresetPayment(100.00, 'Order #Coffee - Espresso', 'succeeded')">
+        Quick ₹100 Coffee (Succeeded)
+      </button>
+      <button type="button" class="btn btn-preset" onclick="runPresetPayment(1499.00, 'Order #SaaS - Monthly Pro', 'succeeded')">
+        Quick ₹1,499 Pro Subscription
+      </button>
+      <button type="button" class="btn btn-preset failed-preset" onclick="runPresetPayment(500.00, 'Order #Declined - Card Timeout', 'failed')">
+        Simulate Gateway Failure (Failed)
+      </button>
+    </div>
+  </section>
+
+  <!-- Recent Transactions Card -->
+  <section class="card table-card">
+    <div class="card-header">
+      <div>
+        <h2 class="card-title">Recent Transactions</h2>
+        <p class="card-desc">Last 5 payment records with real-time status and refund actions.</p>
+      </div>
+      <a href="{{ url_for('transactions_page') }}" class="btn btn-outline btn-sm">
+        View All Transactions &rarr;
+      </a>
+    </div>
+
+    <div class="table-responsive">
+      <table class="data-table" id="recentTable">
+        <thead>
+          <tr>
+            <th>Transaction ID</th>
+            <th>Description</th>
+            <th>Amount (INR)</th>
+            <th>Paise</th>
+            <th>Status</th>
+            <th>Timestamp (UTC)</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="recentTableBody">
+          {% if metrics.recent_transactions %}
+            {% for t in metrics.recent_transactions %}
+            <tr data-id="{{ t.id }}">
+              <td>
+                <a href="{{ url_for('transaction_detail_page', payment_id=t.id) }}" class="mono-link">
+                  {{ t.id }}
+                </a>
+              </td>
+              <td><span class="table-desc">{{ t.description }}</span></td>
+              <td><strong class="font-tabular">₹{{ t.formatted_amount_inr }}</strong></td>
+              <td><span class="mono-text">{{ "{:,}".format(t.amount_paise) }}</span></td>
+              <td>
+                <span class="status-pill {{ t.status }}">
+                  <span class="status-dot"></span>
+                  {{ t.status|capitalize }}
+                </span>
+              </td>
+              <td><span class="time-text">{{ t.created_at[:19].replace('T', ' ') }}</span></td>
+              <td>
+                <div class="action-buttons">
+                  <a href="{{ url_for('transaction_detail_page', payment_id=t.id) }}" class="btn-table-action" title="View Details">
+                    Details
+                  </a>
+                  {% if t.status == 'succeeded' %}
+                  <button type="button" class="btn-table-action refund" onclick="triggerRefund('{{ t.id }}')">
+                    Refund
+                  </button>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="7" class="table-empty">
+                <div class="empty-state">
+                  <div class="empty-icon">💳</div>
+                  <p class="empty-title">No transactions recorded yet</p>
+                  <p class="empty-desc">Click "Simulate Payment" or choose a preset above to create your first payment.</p>
+                  <button type="button" class="btn btn-primary btn-sm" onclick="openCreateModal()">Create First Payment</button>
+                </div>
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Educational Pillars Card -->
+  <section class="pillars-card">
+    <h3 class="pillars-heading">How PayFlow Enforces Payment Correctness</h3>
+    <div class="pillars-grid">
+      <div class="pillar-item">
+        <div class="pillar-icon">🔒</div>
+        <h4>Idempotency Engine</h4>
+        <p>Prevents double charges when users double-click or network connections retry. Exact duplicates return the original payment (HTTP 200); payload mismatches with reused keys return HTTP 409 Conflict.</p>
+      </div>
+      <div class="pillar-item">
+        <div class="pillar-icon">💰</div>
+        <h4>Integer Paise Arithmetic</h4>
+        <p>Financial software never uses floating-point numbers. Amounts are strictly validated and stored as positive integer minor units (100 paise = ₹1.00) to eliminate IEEE 754 rounding errors.</p>
+      </div>
+      <div class="pillar-item">
+        <div class="pillar-icon">⚡</div>
+        <h4>ACID Refund Transactions</h4>
+        <p>Refunds require updating the payment state, creating a refund record, and logging an audit history entry. All writes execute inside a single atomic SQLite transaction with automatic rollback on error.</p>
+      </div>
+    </div>
+  </section>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}

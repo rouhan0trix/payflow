@@ -1,0 +1,214 @@
+﻿{% extends "base.html" %}
+
+{% block title %}Payment {{ payment.id }} — PayFlow{% endblock %}
+
+{% block content %}
+<div class="page-content">
+
+  <!-- Breadcrumb & Back -->
+  <div class="detail-nav-bar">
+    <a href="{{ url_for('transactions_page') }}" class="btn-back">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+      Back to Transactions
+    </a>
+    <div class="detail-quick-actions">
+      <button type="button" class="btn btn-outline btn-sm" onclick="copyToClipboard('{{ payment.id }}', 'Payment ID copied!')">
+        Copy ID
+      </button>
+      <a href="/api/payments/{{ payment.id }}" target="_blank" class="btn btn-outline btn-sm">
+        View JSON API &rarr;
+      </a>
+    </div>
+  </div>
+
+  <!-- Detail Hero Header -->
+  <div class="detail-hero">
+    <div class="detail-hero-left">
+      <span class="detail-eyebrow">Payment Record</span>
+      <h1 class="detail-id-title">{{ payment.id }}</h1>
+      <p class="detail-desc">{{ payment.description }}</p>
+    </div>
+    <div class="detail-hero-right">
+      <div class="detail-amount-box">
+        <span class="detail-amount-val">₹{{ payment.formatted_amount_inr }}</span>
+        <span class="detail-amount-paise">{{ "{:,}".format(payment.amount_paise) }} paise ({{ payment.currency }})</span>
+      </div>
+      <div class="detail-status-wrap">
+        <span class="status-pill lg {{ payment.status }}">
+          <span class="status-dot"></span>
+          {{ payment.status|capitalize }}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail Layout Grid -->
+  <div class="detail-grid">
+
+    <!-- Left Column: Core Metadata & Refund Section -->
+    <div class="detail-main">
+
+      <!-- Attributes Card -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Transaction Attributes</h2>
+        </div>
+        <div class="attr-grid">
+          <div class="attr-item">
+            <span class="attr-label">Payment ID</span>
+            <span class="attr-value mono-text">{{ payment.id }}</span>
+          </div>
+          <div class="attr-item">
+            <span class="attr-label">Status</span>
+            <span class="attr-value">
+              <span class="status-pill {{ payment.status }}">
+                <span class="status-dot"></span>
+                {{ payment.status|capitalize }}
+              </span>
+            </span>
+          </div>
+          <div class="attr-item">
+            <span class="attr-label">Amount (INR)</span>
+            <span class="attr-value font-tabular">₹{{ payment.formatted_amount_inr }}</span>
+          </div>
+          <div class="attr-item">
+            <span class="attr-label">Amount (Paise)</span>
+            <span class="attr-value mono-text">{{ "{:,}".format(payment.amount_paise) }} paise</span>
+          </div>
+          <div class="attr-item">
+            <span class="attr-label">Currency</span>
+            <span class="attr-value">{{ payment.currency }}</span>
+          </div>
+          <div class="attr-item">
+            <span class="attr-label">Idempotency Key</span>
+            <span class="attr-value mono-text word-break">{{ payment.idempotency_key }}</span>
+          </div>
+          <div class="attr-item">
+            <span class="attr-label">Created At (UTC)</span>
+            <span class="attr-value">{{ payment.created_at[:19].replace('T', ' ') }}</span>
+          </div>
+          <div class="attr-item">
+            <span class="attr-label">Last Updated (UTC)</span>
+            <span class="attr-value">{{ payment.updated_at[:19].replace('T', ' ') }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Refund Management Section -->
+      <div class="card refund-action-card">
+        <div class="card-header">
+          <h2 class="card-title">Refund Lifecycle Management</h2>
+        </div>
+        <div class="card-body">
+          {% if payment.status == 'succeeded' %}
+            <div class="refund-eligible-box">
+              <div class="refund-eligible-text">
+                <h3>Eligible for Full Refund</h3>
+                <p>This payment succeeded and has not yet been refunded. Issuing a refund will execute an atomic database transaction: creating a refund record, updating status to <code>refunded</code>, and recording an audit trail entry.</p>
+              </div>
+              <button type="button" class="btn btn-danger btn-lg" onclick="triggerRefund('{{ payment.id }}', true)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+                Issue Full Refund (₹{{ payment.formatted_amount_inr }})
+              </button>
+            </div>
+          {% elif payment.status == 'refunded' and payment.refund %}
+            <div class="refund-completed-box">
+              <div class="refund-status-icon">✓</div>
+              <div class="refund-completed-details">
+                <h3>Refund Processed in Full</h3>
+                <p>This payment has reached terminal state <code>refunded</code>. No additional refunds can be created.</p>
+                <div class="refund-record-meta">
+                  <div><strong>Refund ID:</strong> <span class="mono-text">{{ payment.refund.id }}</span></div>
+                  <div><strong>Refunded Amount:</strong> ₹{{ payment.refund.formatted_amount_inr }} ({{ "{:,}".format(payment.refund.amount_paise) }} paise)</div>
+                  <div><strong>Processed At:</strong> {{ payment.refund.created_at[:19].replace('T', ' ') }} UTC</div>
+                </div>
+              </div>
+            </div>
+          {% elif payment.status == 'failed' %}
+            <div class="state-notice failed">
+              <div class="notice-icon">✕</div>
+              <div>
+                <h4>Ineligible for Refund: Failed Transaction</h4>
+                <p>This payment failed during processing. Money was never captured, so a refund cannot be issued (state machine prevents invalid transitions).</p>
+              </div>
+            </div>
+          {% elif payment.status == 'pending' %}
+            <div class="state-notice pending">
+              <div class="notice-icon">⏱</div>
+              <div>
+                <h4>Ineligible for Refund: Pending Settlement</h4>
+                <p>This payment is pending and has not yet completed settlement. Only fully settled (succeeded) payments can be refunded.</p>
+              </div>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Raw API Response Accordion -->
+      <div class="card">
+        <details class="code-details">
+          <summary class="code-summary">
+            <span>Inspect Raw JSON Payload (GET /api/payments/{{ payment.id }})</span>
+            <span class="chevron">&darr;</span>
+          </summary>
+          <div class="code-body">
+            <pre class="json-code-box">{{ payment|tojson(indent=2) }}</pre>
+          </div>
+        </details>
+      </div>
+
+    </div>
+
+    <!-- Right Column: Status History Stepper / Audit Log -->
+    <div class="detail-sidebar">
+      <div class="card timeline-card">
+        <div class="card-header">
+          <h2 class="card-title">Audit Trail &amp; History</h2>
+          <span class="badge-count">{{ payment.status_history|length }} events</span>
+        </div>
+
+        <div class="timeline">
+          {% for event in payment.status_history %}
+          <div class="timeline-item {% if loop.last %}latest{% endif %}">
+            <div class="timeline-marker">
+              <span class="timeline-dot {{ event.new_status }}"></span>
+              {% if not loop.last %}<div class="timeline-line"></div>{% endif %}
+            </div>
+            <div class="timeline-content">
+              <div class="timeline-header">
+                <span class="status-pill sm {{ event.new_status }}">
+                  {{ event.new_status|capitalize }}
+                </span>
+                <span class="timeline-time">{{ event.changed_at[11:19] }} UTC</span>
+              </div>
+              <p class="timeline-note">{{ event.note }}</p>
+              <div class="timeline-meta">
+                {% if event.old_status %}
+                  <span class="transition-text">{{ event.old_status }} &rarr; {{ event.new_status }}</span>
+                {% else %}
+                  <span class="transition-text">Initial state: {{ event.new_status }}</span>
+                {% endif %}
+                <span class="event-date">{{ event.changed_at[:10] }}</span>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Interview Context Helper Card -->
+      <div class="card tip-card">
+        <div class="tip-header">
+          <span class="tip-icon">💡</span>
+          <h4>Interview Talking Point</h4>
+        </div>
+        <p class="tip-desc">
+          Notice how status changes are not merely overwritten in the <code>payments</code> table. An immutable record is created in <code>status_history</code> on every transition. This guarantees non-repudiation and audit compliance.
+        </p>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}

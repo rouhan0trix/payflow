@@ -1,0 +1,303 @@
+﻿{% extends "base.html" %}
+
+{% block title %}API Documentation & Interview Guide — PayFlow{% endblock %}
+
+{% block content %}
+<div class="page-content">
+
+  <!-- Header -->
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Developer Reference &amp; Interview Guide</h1>
+      <p class="page-subtitle">REST endpoints, schema specifications, and architectural talking points.</p>
+    </div>
+  </div>
+
+  <div class="docs-layout">
+
+    <!-- Sticky Nav -->
+    <aside class="docs-sidebar" aria-label="Documentation navigation">
+      <nav class="docs-nav">
+        <span class="docs-nav-heading">API Reference</span>
+        <a href="#endpoints" class="docs-nav-link">Endpoints Table</a>
+        <a href="#create-payment" class="docs-nav-link">Create Payment (POST)</a>
+        <a href="#list-payments" class="docs-nav-link">List Payments (GET)</a>
+        <a href="#refund-payment" class="docs-nav-link">Refund Payment (POST)</a>
+        <a href="#dashboard-api" class="docs-nav-link">Dashboard Metrics (GET)</a>
+
+        <span class="docs-nav-heading">Interview Prep</span>
+        <a href="#elevator-pitch" class="docs-nav-link highlight">60s Elevator Pitch</a>
+        <a href="#interview-qa" class="docs-nav-link">Core Q&amp;A Cheat Sheet</a>
+        <a href="#resume-bullets" class="docs-nav-link">Resume Bullet Points</a>
+      </nav>
+    </aside>
+
+    <!-- Content Area -->
+    <div class="docs-body">
+
+      <!-- SECTION 1: API ENDPOINTS -->
+      <section id="endpoints" class="card docs-section">
+        <div class="card-header">
+          <h2 class="card-title">REST API Endpoints</h2>
+          <p class="card-desc">All API routes accept and return standard <code>application/json</code>.</p>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Method</th>
+                <th>Route</th>
+                <th>Purpose</th>
+                <th>Status Codes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="http-badge post">POST</span></td>
+                <td><code>/api/payments</code></td>
+                <td>Create a simulated payment</td>
+                <td><span class="mono-text">201, 200, 400, 409</span></td>
+              </tr>
+              <tr>
+                <td><span class="http-badge get">GET</span></td>
+                <td><code>/api/payments</code></td>
+                <td>List payments with status and search filters</td>
+                <td><span class="mono-text">200</span></td>
+              </tr>
+              <tr>
+                <td><span class="http-badge get">GET</span></td>
+                <td><code>/api/payments/&lt;id&gt;</code></td>
+                <td>Retrieve payment details, refund, and history</td>
+                <td><span class="mono-text">200, 404</span></td>
+              </tr>
+              <tr>
+                <td><span class="http-badge post">POST</span></td>
+                <td><code>/api/payments/&lt;id&gt;/refund</code></td>
+                <td>Execute full simulated refund</td>
+                <td><span class="mono-text">200, 404, 409</span></td>
+              </tr>
+              <tr>
+                <td><span class="http-badge get">GET</span></td>
+                <td><code>/api/dashboard</code></td>
+                <td>Aggregated volumes and status counts</td>
+                <td><span class="mono-text">200</span></td>
+              </tr>
+              <tr>
+                <td><span class="http-badge get">GET</span></td>
+                <td><code>/health</code></td>
+                <td>Liveness check and database ping</td>
+                <td><span class="mono-text">200</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- SECTION 2: CREATE PAYMENT DETAIL -->
+      <section id="create-payment" class="card docs-section">
+        <div class="card-header">
+          <div class="endpoint-header-row">
+            <span class="http-badge post">POST</span>
+            <h3 class="endpoint-title">/api/payments</h3>
+          </div>
+          <p class="card-desc">Creates a new payment record or safely replays an existing request if the idempotency key matches.</p>
+        </div>
+        <div class="endpoint-body">
+          <h4 class="sub-heading">Request Payload Specification</h4>
+          <ul class="spec-list">
+            <li><code>amount_paise</code> <em>(integer, required)</em>: Positive integer in minor units (e.g. <code>25000</code> for ₹250.00). Floats, negatives, strings, and booleans are rejected.</li>
+            <li><code>currency</code> <em>(string, optional)</em>: Defaults to <code>"INR"</code>.</li>
+            <li><code>description</code> <em>(string, required)</em>: Non-empty string, maximum 255 characters.</li>
+            <li><code>idempotency_key</code> <em>(string, required)</em>: Unique client-generated key, maximum 64 characters.</li>
+            <li><code>simulate_status</code> <em>(string, optional)</em>: Demo parameter: <code>"succeeded"</code> (default), <code>"failed"</code>, or <code>"pending"</code>.</li>
+          </ul>
+
+          <h4 class="sub-heading">Sample cURL Command</h4>
+          <div class="code-block-wrap">
+            <pre class="json-code-box"><code>curl -X POST http://127.0.0.1:5000/api/payments \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount_paise": 25000,
+    "currency": "INR",
+    "description": "Order #1024 - Annual Plan",
+    "idempotency_key": "order-1024-client-token"
+  }'</code></pre>
+          </div>
+
+          <h4 class="sub-heading">Sample Response (HTTP 201 Created)</h4>
+          <div class="code-block-wrap">
+            <pre class="json-code-box"><code>{
+  "id": "pay_a94f6c12b73e8901",
+  "amount_paise": 25000,
+  "currency": "INR",
+  "description": "Order #1024 - Annual Plan",
+  "status": "succeeded",
+  "idempotency_key": "order-1024-client-token",
+  "formatted_amount_inr": "250.00",
+  "is_replay": false,
+  "created_at": "2026-09-29T10:00:00+00:00",
+  "updated_at": "2026-09-29T10:00:00+00:00"
+}</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 3: REFUND DETAIL -->
+      <section id="refund-payment" class="card docs-section">
+        <div class="card-header">
+          <div class="endpoint-header-row">
+            <span class="http-badge post">POST</span>
+            <h3 class="endpoint-title">/api/payments/&lt;id&gt;/refund</h3>
+          </div>
+          <p class="card-desc">Issues a full simulated refund. Wrapped in an ACID database transaction.</p>
+        </div>
+        <div class="endpoint-body">
+          <h4 class="sub-heading">Behavior &amp; State Guards</h4>
+          <ul class="spec-list">
+            <li><strong>HTTP 200:</strong> Payment is succeeded and was not previously refunded. Returns updated payment with embedded refund object.</li>
+            <li><strong>HTTP 404:</strong> Payment ID does not exist.</li>
+            <li><strong>HTTP 409:</strong> Payment is in an ineligible state (already refunded, failed, or pending).</li>
+          </ul>
+
+          <h4 class="sub-heading">Sample Response (HTTP 200 OK)</h4>
+          <div class="code-block-wrap">
+            <pre class="json-code-box"><code>{
+  "message": "Refund processed successfully.",
+  "payment": {
+    "id": "pay_a94f6c12b73e8901",
+    "amount_paise": 25000,
+    "status": "refunded",
+    "refund": {
+      "id": "rf_81b2e4f0d3a9c71e",
+      "payment_id": "pay_a94f6c12b73e8901",
+      "amount_paise": 25000,
+      "formatted_amount_inr": "250.00",
+      "created_at": "2026-09-29T10:05:00+00:00"
+    }
+  }
+}</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 4: 60s ELEVATOR PITCH -->
+      <section id="elevator-pitch" class="card docs-section pitch-card">
+        <div class="card-header">
+          <div class="pitch-badge">🎯 INTERVIEW READY</div>
+          <h2 class="card-title">60–90 Second Interview Elevator Pitch</h2>
+          <p class="card-desc">A natural, high-impact script you can speak verbatim when an interviewer asks: <em>"Walk me through this project."</em></p>
+        </div>
+        <div class="pitch-content">
+          <blockquote class="pitch-quote">
+            “PayFlow is a simulated payment processing and transaction ledger platform I built using Python Flask, SQLite, and vanilla JavaScript. Rather than just basic CRUD, I designed it around real fintech reliability patterns.
+            <br><br>
+            First, I implemented <strong>idempotency keys</strong> to prevent double-charging: if a client retries a payment with the same key and payload, the server returns the existing transaction with an HTTP 200 replay; if the payload differs, it catches the conflict with an HTTP 409.
+            <br><br>
+            Second, to avoid floating-point rounding errors common with decimal currencies, all amounts are validated and stored as <strong>integer minor units (paise)</strong>.
+            <br><br>
+            Third, for refunds, I implemented a strict <strong>state machine</strong>: only succeeded payments can be refunded, exactly once. The refund record creation, status update, and audit log write are bound inside an <strong>atomic database transaction</strong> with automatic rollback on failure.
+            <br><br>
+            I also wrote an automated test suite covering duplicate requests, state violations, and SQL injection defense.”
+          </blockquote>
+        </div>
+      </section>
+
+      <!-- SECTION 5: INTERVIEW Q&A CHEAT SHEET -->
+      <section id="interview-qa" class="card docs-section">
+        <div class="card-header">
+          <h2 class="card-title">Core Interview Questions &amp; Detailed Answers</h2>
+          <p class="card-desc">Deep technical explanations for common interview follow-ups.</p>
+        </div>
+        <div class="qa-list">
+
+          <div class="qa-item">
+            <h4 class="qa-question">1. What is idempotency and how is it implemented here?</h4>
+            <div class="qa-answer">
+              <p>
+                <strong>Concept:</strong> An operation is idempotent if performing it multiple times has the exact same outcome as performing it once. In payment gateways, network drops or impatient users can trigger duplicate POST requests.
+              </p>
+              <p>
+                <strong>Implementation:</strong> The client sends a unique <code>idempotency_key</code>. Before inserting, the backend queries SQLite for that key.
+              </p>
+              <ul>
+                <li>If the key exists and the payload (amount, currency, description) matches: the server replays the existing record with <code>HTTP 200 OK</code> and <code>is_replay: true</code> without inserting anything.</li>
+                <li>If the key exists but the payload was modified: the server returns <code>HTTP 409 Conflict</code> because reusing a token with different parameters violates protocol integrity.</li>
+                <li>If the key is new: it executes an insert within a database transaction.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="qa-item">
+            <h4 class="qa-question">2. Why store paise as integers instead of floating-point rupees?</h4>
+            <div class="qa-answer">
+              <p>
+                Standard IEEE 754 floating-point arithmetic cannot represent decimal fractions precisely in binary (for example, in Python: <code>0.1 + 0.2 == 0.30000000000000004</code>). Over thousands of financial transactions, rounding errors compound into discrepancies.
+              </p>
+              <p>
+                By storing ₹1.00 as <code>100</code> integer paise, all additions, subtractions, and aggregations are 100% exact integer operations. Formatting to rupees is done strictly in the presentation layer.
+              </p>
+            </div>
+          </div>
+
+          <div class="qa-item">
+            <h4 class="qa-question">3. Why use a database transaction for refunds?</h4>
+            <div class="qa-answer">
+              <p>
+                A refund requires three distinct writes:
+              </p>
+              <ol>
+                <li>Inserting a row into <code>refunds</code></li>
+                <li>Updating the payment row status to <code>refunded</code></li>
+                <li>Inserting an audit record into <code>status_history</code></li>
+              </ol>
+              <p>
+                If step 1 succeeds but the server crashes before step 2, the system ends up in a corrupt state where a refund exists but the payment remains marked succeeded. Using Python’s context manager (<code>with db:</code>) ensures <strong>Atomicity</strong>: all three writes commit together, or none of them do.
+              </p>
+            </div>
+          </div>
+
+          <div class="qa-item">
+            <h4 class="qa-question">4. Why SQLite for this project? How would you scale to production?</h4>
+            <div class="qa-answer">
+              <p>
+                SQLite is embedded, zero-configuration, and runs in-process, making it ideal for self-contained demonstrations and local unit testing.
+              </p>
+              <p>
+                <strong>Production Roadmap:</strong> For high-concurrency production:
+              </p>
+              <ul>
+                <li>Migrate to <strong>PostgreSQL</strong> with row-level locking (<code>SELECT FOR UPDATE</code>) or optimistic locking.</li>
+                <li>Use <strong>Redis</strong> with TTL for distributed idempotency locks.</li>
+                <li>Add merchant multi-tenancy with compound unique keys: <code>(merchant_id, idempotency_key)</code>.</li>
+                <li>Add webhook signature verification (HMAC-SHA256).</li>
+              </ul>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- SECTION 6: RESUME BULLETS -->
+      <section id="resume-bullets" class="card docs-section">
+        <div class="card-header">
+          <h2 class="card-title">Resume Bullet Points</h2>
+          <p class="card-desc">Copy-paste ready bullet points for your software engineering resume.</p>
+        </div>
+        <div class="resume-box">
+          <div class="resume-header">
+            <strong>PayFlow — Payment &amp; Transaction Management Platform</strong> | Python, Flask, SQLite, JavaScript
+          </div>
+          <ul class="resume-list">
+            <li>Architected a simulated payment gateway featuring REST APIs for payment authorization, transaction querying, and state-guarded refunds.</li>
+            <li>Engineered an idempotency verification mechanism to prevent duplicate charges from network retries, supporting automatic replay and payload conflict detection.</li>
+            <li>Enforced financial integrity by standardizing on integer minor currency units (paise) and leveraging atomic SQLite transactions for multi-table refund operations.</li>
+            <li>Authored a comprehensive test suite (13 automated unit/integration tests) verifying state-machine transitions, transaction rollbacks, and SQL-injection defense.</li>
+          </ul>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+</div>
+{% endblock %}
