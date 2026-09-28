@@ -3,12 +3,17 @@ import sqlite3
 from datetime import datetime, timezone
 from flask import g, current_app
 
-DEFAULT_DB_PATH = os.path.join(os.path.dirname(__file__), 'instance', 'payflow.db')
+def get_default_db_path():
+    if os.environ.get('VERCEL'):
+        return os.path.join('/tmp', 'payflow.db')
+    return os.path.join(os.path.dirname(__file__), 'instance', 'payflow.db')
+
+DEFAULT_DB_PATH = get_default_db_path()
 
 def get_db(db_path=None):
     if 'db' not in g:
         target_path = db_path or (
-            current_app.config.get('DATABASE') if current_app else DEFAULT_DB_PATH
+            current_app.config.get('DATABASE') if current_app else get_default_db_path()
         )
         os.makedirs(os.path.dirname(os.path.abspath(target_path)), exist_ok=True)
         g.db = sqlite3.connect(target_path)
@@ -22,7 +27,7 @@ def close_db(e=None):
         db.close()
 
 def init_db(db_path=None):
-    target_path = db_path or DEFAULT_DB_PATH
+    target_path = db_path or get_default_db_path()
     os.makedirs(os.path.dirname(os.path.abspath(target_path)), exist_ok=True)
     conn = sqlite3.connect(target_path)
     conn.execute('PRAGMA foreign_keys = ON;')

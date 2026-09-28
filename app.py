@@ -15,7 +15,7 @@ from flask import (
     url_for,
 )
 from werkzeug.exceptions import HTTPException
-from db import get_db, close_db, init_db, utc_now_iso
+from db import get_db, close_db, init_db, utc_now_iso, get_default_db_path
 import services
 
 
@@ -26,15 +26,15 @@ def create_app(test_config=None):
     # Default configuration
     app.config.from_mapping(
         SECRET_KEY="payflow-dev-secret-key-change-in-prod",
-        DATABASE=os.path.join(app.instance_path, "payflow.db"),
+        DATABASE=get_default_db_path(),
     )
 
     if test_config:
         app.config.from_mapping(test_config)
 
-    # Ensure instance directory exists
+    # Ensure database directory exists
     try:
-        os.makedirs(app.instance_path, exist_ok=True)
+        os.makedirs(os.path.dirname(os.path.abspath(app.config["DATABASE"])), exist_ok=True)
     except OSError:
         pass
 
@@ -44,6 +44,13 @@ def create_app(test_config=None):
     # Initialize tables on startup
     with app.app_context():
         init_db(app.config["DATABASE"])
+        # Seed initial demo transactions if empty (for instant review on Vercel)
+        if not test_config:
+            try:
+                from seed import seed_data
+                seed_data(app)
+            except Exception:
+                pass
 
     # -------------------------------------------------------------
     # Error Handlers
@@ -225,8 +232,10 @@ def create_app(test_config=None):
     return app
 
 
+# Expose top-level app instance for Vercel / WSGI
+app = create_app()
+
 if __name__ == "__main__":
-    app = create_app()
     port = int(os.environ.get("PORT", 5000))
     print(f"[*] Starting PayFlow on http://127.0.0.1:{port}")
     app.run(host="127.0.0.1", port=port, debug=True)

@@ -5,21 +5,22 @@ Populates initial sample transactions so the dashboard has rich demonstration da
 
 import sys
 if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8")
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
-from app import create_app
 import services
 
-def seed():
-    app = create_app()
+def seed_data(app=None):
+    if app is None:
+        from app import create_app
+        app = create_app()
+
     with app.app_context():
-        # Check if already seeded
         metrics = services.get_dashboard_metrics()
         if metrics["total_payments"] > 0:
-            print(f"[*] Database already contains {metrics['total_payments']} payments. Skipping seed.")
             return
-
-        print("[*] Seeding sample transactions...")
 
         sample_payments = [
             {
@@ -63,14 +64,13 @@ def seed():
         for p in sample_payments:
             pay, _ = services.create_payment(p)
             created_payments.append(pay)
-            print(f" [+] Created payment {pay['id']} ({pay['status']}) - INR {services.format_inr(pay['amount_paise'])}")
 
-        # Refund one of the succeeded payments (Order #1003)
-        to_refund = created_payments[2]  # Domain registration
-        refunded = services.refund_payment(to_refund["id"])
-        print(f" [✓] Refunded payment {to_refund['id']} - Refund ID: {refunded['refund']['id']}")
+        if len(created_payments) >= 3:
+            services.refund_payment(created_payments[2]["id"])
 
-        print("[*] Seeding complete! Database is ready.")
+def seed():
+    seed_data()
+    print("[*] Database seeded successfully.")
 
 if __name__ == "__main__":
     seed()
