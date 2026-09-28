@@ -58,7 +58,7 @@ SQLite Database (instance/payflow.db)
 
 ### 1. Clone & Install
 ```bash
-git clone https://github.com/your-username/payflow.git
+git clone https://github.com/rouhan0trix/payflow.git
 cd payflow
 
 # Install Flask
