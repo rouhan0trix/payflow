@@ -1,4 +1,4 @@
-﻿"""
+"""
 PayFlow: Payment & Transaction Management Platform (Flask App)
 Provides both REST API endpoints and web UI views for simulated payments.
 """
@@ -132,11 +132,6 @@ def create_app(test_config=None):
             return render_template("payment_detail.html", payment=payment)
         except services.NotFoundError:
             abort(404)
-
-    @app.route("/docs")
-    def docs_page():
-        """Interactive API documentation and technical interview study guide."""
-        return render_template("api_docs.html")
 
     # -------------------------------------------------------------
     # REST API Endpoints

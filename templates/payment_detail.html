@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 
 {% block title %}Payment {{ payment.id }} — PayFlow{% endblock %}
 
@@ -196,16 +196,6 @@
         </div>
       </div>
 
-      <!-- Interview Context Helper Card -->
-      <div class="card tip-card">
-        <div class="tip-header">
-          <span class="tip-icon">💡</span>
-          <h4>Interview Talking Point</h4>
-        </div>
-        <p class="tip-desc">
-          Notice how status changes are not merely overwritten in the <code>payments</code> table. An immutable record is created in <code>status_history</code> on every transition. This guarantees non-repudiation and audit compliance.
-        </p>
-      </div>
     </div>
 
   </div>

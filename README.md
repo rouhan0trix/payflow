@@ -1,4 +1,4 @@
-﻿# PayFlow — Payment & Transaction Management Platform
+# PayFlow — Payment & Transaction Management Platform
 
 An educational full-stack payment processing and transaction ledger platform built with **Python (Flask)**, **SQLite**, and **vanilla HTML/CSS/JavaScript**.
 
@@ -132,20 +132,19 @@ payflow/
 ├── db.py                  # SQLite connection helper, foreign key pragmas, schema init
 ├── services.py            # Business logic: idempotency, validations, ACID refunds, metrics
 ├── requirements.txt       # Dependencies (Flask)
-├── README.md              # Project documentation and interview talking points
+├── README.md              # Project documentation and architectural overview
 ├── instance/              # Local SQLite database (payflow.db)
 ├── templates/
 │   ├── base.html          # Base layout, navbar, simulation modal, toast container
 │   ├── dashboard.html     # Metrics overview, quick presets, recent activity table
 │   ├── transactions.html  # Full filterable transaction table with search & pagination
 │   ├── payment_detail.html# Transaction breakdown, status history stepper, refund action
-│   ├── api_docs.html      # REST documentation & interview cheat sheet
 │   └── error.html         # User-friendly error display (400, 404, 409, 500)
 ├── static/
 │   ├── css/
 │   │   └── style.css      # Custom fintech dashboard styling (responsive, accessible)
 │   └── js/
-│       ├── app.js         # Modal control, toasts, live paise conversion, idempotency demo
+│       ├── app.js         # Modal control, toasts, live paise conversion, testing shortcuts
 │       └── dashboard.js   # Metric auto-refresh and preset runners
 └── tests/
     └── test_payments.py   # 13 automated unit & integration tests
@@ -153,26 +152,13 @@ payflow/
 
 ---
 
-## 7. How to Explain This Project in an Interview
+## 7. Architectural Decisions & FAQs
 
-### 60-Second Elevator Pitch
-> *"PayFlow is a simulated payment gateway and transaction ledger platform I built using Python Flask, SQLite, and vanilla JavaScript. Rather than a basic CRUD app, I focused on core financial engineering patterns.*
->
-> *First, I implemented an idempotency key mechanism so that retrying the same request returns the original payment record without creating a duplicate charge. If someone alters the payload with the same key, it catches the conflict with an HTTP 409.*
->
-> *Second, I stored all amounts as integer paise rather than floating-point rupees to eliminate IEEE 754 precision errors.*
->
-> *Third, for refunds, I implemented a strict state machine: only succeeded payments can be refunded, exactly once. The refund record, status update, and audit log write are wrapped in an atomic database transaction with automatic rollback on failure.*
->
-> *The project also includes an automated test suite verifying edge cases, state violations, and SQL injection defense."*
+### Why store money as an integer in paise?
+Computers use binary floating-point representation (IEEE 754), which cannot represent decimal numbers like `0.1` or `0.2` exactly. In Python, `0.1 + 0.2 == 0.30000000000000004`. Over thousands of transactions, floating-point math causes rounding discrepancies. Representing currency in its smallest minor unit (paise) ensures exact arithmetic using integers.
 
-### Top Interview Questions & Answers
+### How does the idempotency key prevent duplicate payments?
+Before inserting a payment, the server queries SQLite for the unique `idempotency_key`. If the key exists with identical parameters (amount, currency, description), it returns the existing payment with `HTTP 200` without inserting a duplicate row. If the key exists but the parameters were modified, it returns `HTTP 409 Conflict`.
 
-**Q: Why store money as an integer in paise?**  
-*A: Computers use binary floating-point representation (IEEE 754), which cannot represent numbers like `0.1` or `0.2` exactly. In Python, `0.1 + 0.2 == 0.30000000000000004`. Over thousands of transactions, floating-point math causes rounding discrepancies. Representing currency in its smallest minor unit (paise) ensures exact arithmetic using integers.*
-
-**Q: How does the idempotency key prevent double-charging?**  
-*A: Before inserting a payment, we query the unique `idempotency_key`. If the key exists with identical parameters (amount, currency, description), we return the existing payment with `HTTP 200` without inserting a new row. If the key exists but the parameters were tampered with, we return `HTTP 409 Conflict`.*
-
-**Q: Why use a database transaction for refunds?**  
-*A: A refund requires three writes: inserting into `refunds`, updating `payments` status to `refunded`, and appending an audit record to `status_history`. If the second or third write fails, `with conn:` triggers a rollback so the database never ends up in a corrupted state.*
+### Why use a database transaction for refunds?
+A refund requires three writes: inserting into `refunds`, updating `payments` status to `refunded`, and appending an audit record to `status_history`. If the second or third write fails, `with conn:` triggers an automatic rollback so the ledger is never left in an inconsistent state.
